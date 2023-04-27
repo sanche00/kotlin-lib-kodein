@@ -7,7 +7,7 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.Arrays;
-import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 
@@ -21,10 +21,7 @@ public class ReflectionUtils {
         BufferedReader reader = new BufferedReader(new InputStreamReader(stream));
         return reader.lines()
                 .filter(line -> line.endsWith(".class"))
-                .flatMap(line -> {
-                    Class klass = getClass(line, packageName);
-                    return Objects.isNull(klass) ? Stream.empty() : Stream.of(klass);
-                });
+                .flatMap(line ->getClass(line, packageName).stream());
     }
 
     public static Stream<Class> findAllClasses(String basePacakge) {
@@ -33,13 +30,13 @@ public class ReflectionUtils {
                 .flatMap(x->findAllClassesUsingClassLoader(x.getName()));
     }
 
-    static Class getClass(String className, String packageName) {
+    static Optional<Class> getClass(String className, String packageName) {
         try {
-            return Class.forName(packageName + "."
-                    + className.substring(0, className.lastIndexOf('.')));
+            return Optional.of(Class.forName(packageName + "."
+                    + className.substring(0, className.lastIndexOf('.'))));
         } catch (ClassNotFoundException e) {
             logger.warn("load class Error ".concat("className"), e);
+            return Optional.empty();
         }
-        return null;
     }
 }

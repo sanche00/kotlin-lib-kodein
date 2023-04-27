@@ -1,19 +1,17 @@
 package com.ssg.inc.sp.kotlin.di
 
+import com.ssg.inc.sp.kotlin.kodein.KodeinBean
 import com.ssg.inc.sp.kotlin.kodein.KodeinConfiguration
-import com.ssg.inc.sp.kotlin.kodein.KodeinField
-import com.ssg.inc.sp.kotlin.kodein.KodeinFunction
 
 @KodeinConfiguration
 class KodeinConfig {
 
-    @KodeinField(tag = "test")
+    @KodeinBean(tag = "test")
     private val test:String = "test"
-
 
     private val test2:String = "test2"
 
-    @KodeinFunction
+    @KodeinBean
     fun test():TypeParam {
         return TypeParam()
     }

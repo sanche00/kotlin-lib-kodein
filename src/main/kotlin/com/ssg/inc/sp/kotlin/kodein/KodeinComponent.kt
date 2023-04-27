@@ -1,28 +1,45 @@
 package com.ssg.inc.sp.kotlin.kodein
 
+import kotlin.reflect.KCallable
 import kotlin.reflect.KClass
-import kotlin.reflect.KFunction
-import kotlin.reflect.KProperty1
+
+const val DEFAULT_MODULE = "MAIN_KODEIN_BEANS"
 
 class KodeinComponent private constructor(
-    val kodeinMeta: Annotation,
-    val value: Any,
+    val kodeinMeta: KodeinBean,
+    val kReflect: Any,
+    val configObj: Any = Any(),
     val module: String,
     val tag: String
 ) {
 
     companion object {
-        fun createKodeinComponent(kodeinField: KodeinField, property: KProperty1<*, *>): KodeinComponent {
-            return KodeinComponent(kodeinField, property, "", "");
+        fun <T : KCallable<*>> createKodeinComponent(
+            kodeinBean: KodeinBean,
+            property: T,
+            config: Any
+        ): KodeinComponent {
+            return KodeinComponent(
+                kodeinBean,
+                property,
+                config,
+                kodeinBean.module,
+                kodeinBean.tag.ifBlank { property.name }
+            );
         }
 
-        fun <T : Any> createKodeinComponent(kodeinBean: KodeinBean, kClass: KClass<T>): KodeinComponent {
-            return KodeinComponent(kodeinBean, kClass, "", "");
+        fun createKodeinComponent(
+            kodeinBean: KodeinBean,
+            kClass: KClass<*>
+        ): KodeinComponent {
+            return KodeinComponent(
+                kodeinMeta = kodeinBean,
+                kReflect = kClass,
+                module = kodeinBean.module,
+                tag = kodeinBean.tag.ifBlank { kClass.simpleName!! }
+            );
         }
 
-        fun createKodeinComponent(kodeinFunction: KodeinFunction, function: KFunction<*>): KodeinComponent {
-            return KodeinComponent(kodeinFunction, function, "", "");
-        }
     }
 }
 

@@ -2,108 +2,101 @@ package com.ssg.inc.sp.kotlin.kodein
 
 import com.ssg.inc.sp.reflect.ReflectionUtils
 import org.kodein.di.DI
-import org.kodein.di.bindConstant
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import java.util.stream.Stream
+import kotlin.reflect.KCallable
 import kotlin.reflect.KClass
-import kotlin.reflect.full.declaredFunctions
-import kotlin.reflect.full.declaredMemberProperties
-import kotlin.reflect.full.findAnnotation
-import kotlin.reflect.full.hasAnnotation
+import kotlin.reflect.KFunction
+import kotlin.reflect.KProperty1
+import kotlin.reflect.full.*
 import kotlin.streams.toList
 
 object KodeinBeanLoader {
 
-    private fun MutableMap<String, MutableList<KodeinComponent>>.append(kodeinComponent: KodeinComponent) {
+    private val logger: Logger = LoggerFactory.getLogger(KodeinBeanLoader::class.java)
+    private val cache = mutableMapOf<KClass<*>, Any>()
+    private fun getCache(kClass: KClass<*>) {
+        if (cache.containsKey(kClass)) {
+            cache[kClass]
+        } else {
+            cache[kClass] = kClass.createInstance()
+            cache[kClass]
+        }
+    }
+
+    fun createKodeinModules(kodeinMap: MutableMap<String, MutableList<KodeinComponent>>): List<DI.Module> {
+        sortedMapOfBeanReference(kodeinMap)
+        return emptyList()
+    }
+
+    fun sortedMapOfBeanReference(kodeinMap: MutableMap<String, MutableList<KodeinComponent>>): Stream<Pair<String, List<KodeinComponent>>> {
+        return Stream.of()
+    }
+
+    fun MutableMap<String, MutableList<KodeinComponent>>.append(kodeinComponent: KodeinComponent) {
         val value = get(kodeinComponent.module) ?: mutableListOf()
         value.add(kodeinComponent)
         put(kodeinComponent.module, value)
     }
 
-
-    private inline fun <reified T : Any> registerBean(di: DI.Builder, value: T, kodeinMeta: KodeinField) {
-        di.bindConstant(tag = kodeinMeta.tag) { value }
-    }
-
-    private inline fun <reified T : Any> registerBean(di: DI.Builder, value: T, kodeinMeta: KodeinFunction) {
-        di.bindConstant(tag = kodeinMeta.tag) { value }
-    }
-
-    private inline fun <reified T : Any> registerBean(di: DI.Builder, kClass: KClass<T>, kodeinMeta: KodeinBean) {
-        when (kodeinMeta.bind) {
-            BindType.Constant -> {
-                di.bindConstant(tag = kodeinMeta.tag) {}
-            }
-            else -> {
-
-            }
+    private inline fun <reified T : Any> registerBean(di: DI.Builder, kodeinComponent: KodeinComponent) {
+        when (kodeinComponent.kReflect) {
+            is KFunction<*> -> return
+            is KProperty1<*, *> -> return
+            is KClass<*> -> return
+            else -> throw Exception("not supported auto bind bean ${kodeinComponent.kReflect}")
         }
     }
 
-    fun loadPackage(basePackage: String) {
-        val kodeinMap = mutableMapOf<String, MutableList<KodeinComponent>>()
+    fun loadKodeinMapByPackage(basePackage: String): MutableMap<String, MutableList<KodeinComponent>> {
 
+        val kodeinMap = mutableMapOf<String, MutableList<KodeinComponent>>()
         val classes = ReflectionUtils.findAllClasses(basePackage)
             .map { it.kotlin }
             .filter { it.simpleName != null }.toList();
+
         loadKodeinBeans(classes, kodeinMap)
-        loadKodeinBeansByKodeinConfiguration(classes, kodeinMap)
+        loadKodeinBeansByKodeinConfigurations(classes, kodeinMap)
+        return kodeinMap
     }
 
-    private inline fun <reified T : Any> loadKodeinBeans (
-        classes: Stream<KClass<Any>>,
+    fun loadKodeinBeansByKodeinConfigurations(
+        classes: List<KClass<*>>,
         kodeinMap: MutableMap<String, MutableList<KodeinComponent>>
     ) {
         val configClasses = classes.filter { it.hasAnnotation<KodeinConfiguration>() }.toList()
-        loadKodeinFields(configClasses, kodeinMap)
-        loadKodeinFunctions(configClasses, kodeinMap)
-    }
-
-
-    private fun loadKodeinBeansByKodeinConfiguration (
-        classes: List<KClass<Any>>,
-        kodeinMap: MutableMap<String, MutableList<KodeinComponent>>
-    ) {
-        val configClasses = classes.filter { it.hasAnnotation<KodeinConfiguration>() }.toList()
-        loadKodeinFields(configClasses, kodeinMap)
-        loadKodeinFunctions(configClasses, kodeinMap)
-    }
-
-
-    private fun loadKodeinFunctions(
-        configClasses: List<KClass<Any>>,
-        kodeinMap: MutableMap<String, MutableList<KodeinComponent>>
-    ) {
         configClasses.stream()
-            .flatMap { it.declaredFunctions.stream() }
-            .filter { it.hasAnnotation<KodeinFunction>() }
+            .forEach { loadKodeinBeansByKodeinConfiguration(it, it.declaredFunctions.stream(), kodeinMap) }
+        configClasses.stream()
+            .forEach { loadKodeinBeansByKodeinConfiguration(it, it.declaredMemberProperties.stream(), kodeinMap) }
+    }
+
+    private inline fun <reified T : KCallable<*>> loadKodeinBeansByKodeinConfiguration(
+        configClass: KClass<*>,
+        stream: Stream<T>,
+        kodeinMap: MutableMap<String, MutableList<KodeinComponent>>
+    ) {
+        stream.filter { it.hasAnnotation<KodeinBean>() }
             .forEach {
-                val meta = it.findAnnotation<KodeinFunction>()!!
-                kodeinMap.append(KodeinComponent.createKodeinComponent(meta, it))
+                kodeinMap.append(
+                    KodeinComponent.createKodeinComponent(
+                        it.findAnnotation<KodeinBean>()!!,
+                        it,
+                        getCache(configClass)
+                    )
+                )
             }
     }
 
-    private fun loadKodeinFields(
-        configClasses: List<KClass<Any>>,
-        kodeinMap: MutableMap<String, MutableList<KodeinComponent>>
-    ) {
-        configClasses.stream()
-            .flatMap { it.declaredMemberProperties.stream() }
-            .filter { it.hasAnnotation<KodeinField>() }
-            .forEach {
-                val meta = it.findAnnotation<KodeinField>()!!
-                kodeinMap.append(KodeinComponent.createKodeinComponent(meta, it))
-            }
-    }
-
-    private fun loadKodeinBeans(
-        classes: List<KClass<Any>>,
+    fun loadKodeinBeans(
+        classes: List<KClass<*>>,
         kodeinMap: MutableMap<String, MutableList<KodeinComponent>>
     ) {
         classes.filter {
             it.hasAnnotation<KodeinBean>()
         }.forEach {
-            val meta = it.findAnnotation<KodeinBean>()!!
-            kodeinMap.append(KodeinComponent.createKodeinComponent(meta, it))
+            kodeinMap.append(KodeinComponent.createKodeinComponent(it.findAnnotation<KodeinBean>()!!, it))
         }
     }
 }
