@@ -1,9 +1,7 @@
 package com.ssg.inc.sp.kotlin.kodein
 
 @Target(
-    AnnotationTarget.FIELD,
-    AnnotationTarget.FUNCTION,
-    AnnotationTarget.CLASS
+    AnnotationTarget.PROPERTY
 )
 @Retention(AnnotationRetention.RUNTIME)
 annotation class KodeinField(
