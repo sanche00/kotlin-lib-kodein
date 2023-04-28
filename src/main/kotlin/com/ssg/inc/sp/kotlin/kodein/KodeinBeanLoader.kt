@@ -16,6 +16,9 @@ object KodeinBeanLoader {
 
     private val logger: Logger = LoggerFactory.getLogger(KodeinBeanLoader::class.java)
     private val cache = mutableMapOf<KClass<*>, Any>()
+
+    private val kodeinBeanRegister : KodeinBeanRegister = KodeinBeanRegister()
+
     private fun getCache(kClass: KClass<*>) {
         if (cache.containsKey(kClass)) {
             cache[kClass]
@@ -40,22 +43,20 @@ object KodeinBeanLoader {
         put(kodeinComponent.module, value)
     }
 
-    private inline fun <reified T : Any> registerBean(di: DI.Builder, kodeinComponent: KodeinComponent) {
-        when (kodeinComponent.kReflect) {
-            is KFunction<*> -> return
-            is KProperty1<*, *> -> return
-            is KClass<*> -> return
-            else -> throw Exception("not supported auto bind bean ${kodeinComponent.kReflect}")
-        }
-    }
+
 
     fun loadKodeinMapByPackage(basePackage: String): MutableMap<String, MutableList<KodeinComponent>> {
 
-        val kodeinMap = mutableMapOf<String, MutableList<KodeinComponent>>()
         val classes = ReflectionUtils.findAllClasses(basePackage)
             .map { it.kotlin }
             .filter { it.simpleName != null }.toList();
 
+        return loadKodeinMapByClasses(classes)
+    }
+
+    fun loadKodeinMapByClasses(classes: List<KClass<Any>>): MutableMap<String, MutableList<KodeinComponent>> {
+
+        val kodeinMap = mutableMapOf<String, MutableList<KodeinComponent>>()
         loadKodeinBeans(classes, kodeinMap)
         loadKodeinBeansByKodeinConfigurations(classes, kodeinMap)
         return kodeinMap
