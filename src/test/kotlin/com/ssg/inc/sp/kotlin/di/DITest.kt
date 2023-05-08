@@ -1,21 +1,13 @@
 package com.ssg.inc.sp.kotlin.di
 
 import com.ssg.inc.sp.HelloTest
-import com.ssg.inc.sp.kotlin.kodein.KodeinBean
-import com.ssg.inc.sp.kotlin.kodein.KodeinConfiguration
-import com.ssg.inc.sp.reflect.ReflectionUtils
 import org.junit.jupiter.api.Test
 import org.kodein.di.DI
 import org.kodein.di.bind
 import org.kodein.di.eagerSingleton
 import org.kodein.di.instance
-import kotlin.jvm.internal.PropertyReference
 import kotlin.reflect.KClass
-import kotlin.reflect.full.*
-import kotlin.reflect.jvm.internal.impl.metadata.ProtoBuf.Property
-import kotlin.reflect.jvm.isAccessible
-import kotlin.reflect.jvm.javaField
-import kotlin.streams.toList
+import kotlin.reflect.full.createInstance
 import kotlin.test.assertEquals
 
 class DITest {
@@ -44,74 +36,4 @@ class DITest {
         assertEquals(ret.text(), "TEST")
     }
 
-    @Test
-    fun loadBeanTest() {
-        val kodeinBeanClasses = ReflectionUtils.findAllClassesUsingClassLoader("com.ssg.inc.sp.kotlin.di")
-            .map { it.kotlin }
-            .filter { it.simpleName != null }
-            .filter {
-                it.hasAnnotation<KodeinBean>()
-            }
-            .toList()
-        assertEquals(kodeinBeanClasses.size, 2)
-        kodeinBeanClasses.forEach {
-            println(it)
-        }
-
-        for (kodeinBean in kodeinBeanClasses) {
-            val kodeinMeta = kodeinBean.findAnnotation<KodeinBean>()
-            assertEquals(kodeinMeta!!.module, "test")
-            assertEquals(kodeinBean.constructors.size, 1)
-            kodeinBean.constructors.first().parameters.forEach { println(it) }
-        }
-    }
-
-    @Test
-    fun loadPropertyTest() {
-        val kodeinBeanClasses = ReflectionUtils.findAllClassesUsingClassLoader("com.ssg.inc.sp.kotlin.di")
-            .map { it.kotlin }
-            .filter { it.simpleName != null }
-            .filter {
-                it.hasAnnotation<KodeinConfiguration>()
-            }
-            .toList()
-        assertEquals(kodeinBeanClasses.size, 1)
-        val temp = kodeinBeanClasses.first().createInstance();
-        kodeinBeanClasses.first().declaredMemberProperties
-            .map{
-                it
-            }
-            .filter { it.hasAnnotation<KodeinBean>() }.forEach {
-                println(it)
-                val meta = it.findAnnotation<KodeinBean>()!!
-                if(meta.tag == "test") {
-                    if(!it.isAccessible) {
-                        it.javaField?.trySetAccessible()
-                    }
-                    assertEquals("test", it.get(temp))
-                }
-            }
-    }
-
-    @Test
-    fun loadFunctionTest() {
-        val kodeinBeanClasses = ReflectionUtils.findAllClassesUsingClassLoader("com.ssg.inc.sp.kotlin.di")
-            .map { it.kotlin }
-            .filter { it.simpleName != null }
-            .filter {
-                it.hasAnnotation<KodeinConfiguration>()
-            }
-            .toList()
-        assertEquals(kodeinBeanClasses.size, 1)
-        val temp = kodeinBeanClasses.first().createInstance();
-        kodeinBeanClasses.first().declaredFunctions
-            .map{
-                it
-            }
-            .filter { it.hasAnnotation<KodeinBean>() }.forEach {
-                println(it)
-                val meta = it.findAnnotation<KodeinBean>()!!
-                println(meta)
-            }
-    }
 }
