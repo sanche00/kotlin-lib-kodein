@@ -9,4 +9,7 @@ class HelloTestConfig {
 
     @KodeinBean(tag = "test2")
     val test2: Int = 10
+
+    @KodeinBean(tag = "test3")
+    val test3: String = "test1"
 }

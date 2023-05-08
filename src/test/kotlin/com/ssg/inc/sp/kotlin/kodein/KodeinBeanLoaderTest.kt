@@ -32,7 +32,8 @@ class KodeinBeanLoaderTest {
 
         val kodeinDIAwareAuto by di.instance<KodeinDIAwareAuto> ()
         assertEquals(kodeinDIAwareAuto.getText(), "test1")
-//        assertEquals(kodeinDIAwareAuto.test, "test1")
+        assertEquals(kodeinDIAwareAuto.test3, "test1")
+        assertEquals(kodeinDIAwareAuto.test2, 10)
     }
 
 

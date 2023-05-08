@@ -1,6 +1,7 @@
 package com.ssg.inc.sp.kotlin.kodein
 
 import org.kodein.di.*
+import org.kodein.type.TypeToken
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import kotlin.reflect.KClass
@@ -14,7 +15,11 @@ object KodeinBeanLoader {
 
     public val logger: Logger = LoggerFactory.getLogger(KodeinBeanLoader::class.java)
 
-    inline fun <reified T : Any> DI.Builder.loadConstantsBean(config: T) {
+    private inline fun <reified T : Any> DI.Builder.loadConstantBean(kClass: KClass<T>, tag: String, value: Any) {
+        bindConstant(tag) { value }
+    }
+
+    inline fun <T : Any> DI.Builder.loadConstantsBean(config: T) {
         val kClass = config::class
         kClass.declaredMemberProperties
             .filter { it.hasAnnotation<KodeinBean>() }
@@ -30,8 +35,11 @@ object KodeinBeanLoader {
                 if (value == null) {
                     throw Exception("constant bean 의 값은 null 일 수 없습니다.")
                 }
-                constant(if (meta.tag == "") it.name else meta.tag) with { value }
-//                bindConstant(if (meta.tag == "") it.name else meta.tag) { value }
+//                constant(if (meta.tag == "") it.name else meta.tag) with { value }
+                val tag = if (meta.tag == "") it.name else meta.tag
+                logger.info("bind constant $tag, $value")
+//                this.loadConstantBean(kClass = meta.type, tag = tag, value = value)
+                bindConstant(tag) { value }
             }
     }
 
@@ -51,7 +59,20 @@ object KodeinBeanLoader {
         logger.info("load kodein bean meta $beanMeta")
 
         when (beanMeta.bind) {
-            BindType.Singleton -> bind<T>(getTag(beanMeta)) with singleton { value ?: createInstance(kClass) }
+            BindType.Singleton -> {
+                val ref = when (beanMeta.ref) {
+                    Reference.None -> null
+                    Reference.SoftReference -> softReference
+                    Reference.WeakReference -> weakReference
+                    Reference.ThreadLocal -> threadLocal
+                }
+                bind<T>(getTag(beanMeta)) with singleton(ref = ref, sync = beanMeta.sync) {
+                    value ?: createInstance(
+                        kClass
+                    )
+                }
+            }
+
             BindType.Provider -> bind<T>(getTag(beanMeta)) with provider { value ?: createInstance(kClass) }
             BindType.EagerSingleton -> bind<T>(getTag(beanMeta)) with eagerSingleton { value ?: createInstance(kClass) }
             BindType.Factory -> bind<T>(getTag(beanMeta)) with factory { value ?: createInstance(kClass) }
@@ -60,6 +81,7 @@ object KodeinBeanLoader {
             BindType.Constant -> {
                 bindConstant<T>(getTag(beanMeta, kClass)!!) { value ?: kClass.createInstance() }
             }
+
             else -> throw Exception("not yet")
         }
 
@@ -72,6 +94,13 @@ object KodeinBeanLoader {
         }
         val meta = kClass.findAnnotation<KodeinBean>()!!
         return instance(getTag(meta, kClass))
+    }
+
+    inline fun <reified T : Any> DIAware.injectConst(tag: String): org.kodein.di.LazyDelegate<T> {
+        val key = di.container.tree.let {
+            it.bindings.keys.first { key -> key.tag == tag }
+        }
+        return Instance(key.type, tag) as LazyDelegate<T>
     }
 
     fun <T : Any> org.kodein.di.DirectDI.createInstance(kClass: KClass<T>): T {
