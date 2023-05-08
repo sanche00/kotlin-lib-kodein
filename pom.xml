@@ -18,6 +18,7 @@
         <junit.version>4.13.1</junit.version>
         <kodein.version>7.17.0</kodein.version>
         <junit-jupiter.version>5.4.2</junit-jupiter.version>
+
     </properties>
 
     <dependencies>
