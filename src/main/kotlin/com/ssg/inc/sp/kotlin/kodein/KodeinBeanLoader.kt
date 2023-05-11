@@ -1,10 +1,13 @@
 package com.ssg.inc.sp.kotlin.kodein
 
+import com.ssg.inc.sp.kotlin.kodein.KodeinBeanLoader.callFunction
+import com.ssg.inc.sp.kotlin.kodein.KodeinBeanLoader.createArgument
 import org.kodein.di.*
 import org.kodein.type.TypeToken
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import kotlin.reflect.KClass
+import kotlin.reflect.KFunction
 import kotlin.reflect.KParameter
 import kotlin.reflect.full.*
 import kotlin.reflect.jvm.isAccessible
@@ -49,6 +52,55 @@ object KodeinBeanLoader {
         loadConstantsBean(instance)
     }
 
+    inline fun <reified T : Any> DI.Builder.loadKodeinBean(parent:Any , kFunction: KFunction<T>, value: T? = null) {
+        logger.info("load kodein bean for kFunction : $kFunction")
+        if (!kFunction.hasAnnotation<KodeinBean>()) {
+            throw Exception("not defined KodeinBean")
+        }
+
+        val beanMeta = kFunction.findAnnotation<KodeinBean>()!!
+        logger.info("load kodein bean meta $beanMeta")
+
+        when (beanMeta.bind) {
+            BindType.Singleton -> {
+                val ref = when (beanMeta.ref) {
+                    Reference.None -> null
+                    Reference.SoftReference -> softReference
+                    Reference.WeakReference -> weakReference
+                    Reference.ThreadLocal -> threadLocal
+                }
+                bind<T>(getTag(beanMeta)) with singleton(ref = ref, sync = beanMeta.sync) {
+                    value ?: callFunction(
+                        parent,kFunction
+                    )
+                }
+            }
+
+            BindType.Provider -> bind<T>(getTag(beanMeta)) with provider { value ?: callFunction(parent, kFunction) }
+            BindType.EagerSingleton -> bind<T>(getTag(beanMeta)) with eagerSingleton { value ?: callFunction(parent,kFunction) }
+            BindType.Factory -> bind<T>(getTag(beanMeta)) with factory { value ?: callFunction(parent,kFunction) }
+            BindType.Multiton -> bind<T>(getTag(beanMeta)) with multiton { value ?: callFunction(parent,kFunction) }
+//            BindType.Instance -> bind<T>(getTag(beanMeta)) with instance { _instance }
+//            BindType.Constant -> {
+//                bindConstant<T>(getTag(beanMeta, T::class)!!) { value ?: callFuntion(parent, kFunction) }
+//            }
+            else -> throw Exception("not yet")
+        }
+    }
+
+    fun <T> org.kodein.di.DirectDI.callFunction(parent:Any, kFunction: KFunction<T>) : T {
+
+        if (kFunction.parameters.isEmpty()) {
+            return kFunction.call(parent)
+        }
+
+        return kFunction.callBy(kFunction.parameters
+            .map {
+                it to if(it.name == null) parent else createArgument(it)
+            }.filter { it.second != null }.toMap()
+        )
+    }
+
     inline fun <reified T : Any> DI.Builder.loadKodeinBean(kClass: KClass<T>, value: T? = null) {
         logger.info("load kodein bean for KClass : $kClass")
         if (!kClass.hasAnnotation<KodeinBean>()) {
@@ -81,7 +133,6 @@ object KodeinBeanLoader {
             BindType.Constant -> {
                 bindConstant<T>(getTag(beanMeta, kClass)!!) { value ?: kClass.createInstance() }
             }
-
             else -> throw Exception("not yet")
         }
 
@@ -96,7 +147,12 @@ object KodeinBeanLoader {
         return instance(getTag(meta, kClass))
     }
 
+    inline fun <reified T : Any> DIAware.injectConst(kodeinInject: KodeinInject): org.kodein.di.LazyDelegate<T> {
+        return injectConst(kodeinInject.tag)
+    }
+
     inline fun <reified T : Any> DIAware.injectConst(tag: String): org.kodein.di.LazyDelegate<T> {
+
         val key = di.container.tree.let {
             it.bindings.keys.first { key -> key.tag == tag }
         }

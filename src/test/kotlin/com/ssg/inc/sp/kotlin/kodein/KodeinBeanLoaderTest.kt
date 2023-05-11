@@ -21,6 +21,7 @@ class KodeinBeanLoaderTest {
             loadKodeinBean(HelloTest::class)
             loadKodeinBean(KodeinDIAware::class)
             loadKodeinBean(KodeinDIAwareAuto::class)
+            loadKodeinBean(HelloTestConfig(), HelloTestConfig::testBean)
         }
         val di = DI {
             import(module)
@@ -34,6 +35,10 @@ class KodeinBeanLoaderTest {
         assertEquals(kodeinDIAwareAuto.getText(), "test1")
         assertEquals(kodeinDIAwareAuto.test3, "test1")
         assertEquals(kodeinDIAwareAuto.test2, 10)
+
+        val testBean by di.instance<HelloTestConfig.TestBean> ("test4")
+        assertEquals(testBean.test2, 10)
+
     }
 
 
