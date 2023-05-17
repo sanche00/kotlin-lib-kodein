@@ -7,7 +7,7 @@ import kotlin.reflect.KClass
     AnnotationTarget.VALUE_PARAMETER,
     AnnotationTarget.TYPE_PARAMETER,
 )
-@Retention(AnnotationRetention.RUNTIME)
+@Retention(AnnotationRetention.SOURCE)
 annotation class KodeinInject(
     val tag: String = "",
 //    val type: KClass<*>

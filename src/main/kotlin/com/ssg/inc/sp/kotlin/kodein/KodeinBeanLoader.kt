@@ -1,9 +1,8 @@
 package com.ssg.inc.sp.kotlin.kodein
 
-import com.ssg.inc.sp.kotlin.kodein.KodeinBeanLoader.callFunction
-import com.ssg.inc.sp.kotlin.kodein.KodeinBeanLoader.createArgument
 import org.kodein.di.*
 import org.kodein.type.TypeToken
+import org.kodein.type.jvmType
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import kotlin.reflect.KClass
@@ -12,11 +11,12 @@ import kotlin.reflect.KParameter
 import kotlin.reflect.full.*
 import kotlin.reflect.jvm.isAccessible
 import kotlin.reflect.jvm.javaField
+import kotlin.reflect.jvm.jvmName
 
 
 object KodeinBeanLoader {
 
-    public val logger: Logger = LoggerFactory.getLogger(KodeinBeanLoader::class.java)
+    val logger: Logger = LoggerFactory.getLogger(KodeinBeanLoader::class.java)
 
     private inline fun <reified T : Any> DI.Builder.loadConstantBean(kClass: KClass<T>, tag: String, value: Any) {
         bindConstant(tag) { value }
@@ -42,7 +42,15 @@ object KodeinBeanLoader {
                 val tag = if (meta.tag == "") it.name else meta.tag
                 logger.info("bind constant $tag, $value")
 //                this.loadConstantBean(kClass = meta.type, tag = tag, value = value)
-                bindConstant(tag) { value }
+                when (value) {
+                    is String -> bindConstant<String>(tag) { value }
+                    is Int -> bindConstant<Int>(tag) { value }
+                    is Long -> bindConstant<Long>(tag) { value }
+                    is Double -> bindConstant<Double>(tag) { value }
+                    is Float -> bindConstant<Float>(tag) { value }
+                    else -> bindConstant(tag) { value }
+                }
+
             }
     }
 
@@ -52,7 +60,7 @@ object KodeinBeanLoader {
         loadConstantsBean(instance)
     }
 
-    inline fun <reified T : Any> DI.Builder.loadKodeinBean(parent:Any , kFunction: KFunction<T>, value: T? = null) {
+    inline fun <reified T : Any> DI.Builder.loadKodeinBean(parent: Any, kFunction: KFunction<T>, value: T? = null) {
         logger.info("load kodein bean for kFunction : $kFunction")
         if (!kFunction.hasAnnotation<KodeinBean>()) {
             throw Exception("not defined KodeinBean")
@@ -69,17 +77,36 @@ object KodeinBeanLoader {
                     Reference.WeakReference -> weakReference
                     Reference.ThreadLocal -> threadLocal
                 }
-                bind<T>(getTag(beanMeta)) with singleton(ref = ref, sync = beanMeta.sync) {
+                bind<T>(getTag(beanMeta, kFunction.returnType.classifier as KClass<*>?)) with singleton(
+                    ref = ref,
+                    sync = beanMeta.sync
+                ) {
                     value ?: callFunction(
-                        parent,kFunction
+                        parent, kFunction
                     )
                 }
             }
 
-            BindType.Provider -> bind<T>(getTag(beanMeta)) with provider { value ?: callFunction(parent, kFunction) }
-            BindType.EagerSingleton -> bind<T>(getTag(beanMeta)) with eagerSingleton { value ?: callFunction(parent,kFunction) }
-            BindType.Factory -> bind<T>(getTag(beanMeta)) with factory { value ?: callFunction(parent,kFunction) }
-            BindType.Multiton -> bind<T>(getTag(beanMeta)) with multiton { value ?: callFunction(parent,kFunction) }
+            BindType.Provider -> bind<T>(
+                getTag(
+                    beanMeta, kFunction.returnType.classifier as KClass<*>?
+                )
+            ) with provider { value ?: callFunction(parent, kFunction) }
+            BindType.EagerSingleton -> bind<T>(
+                getTag(
+                    beanMeta, kFunction.returnType.classifier as KClass<*>?
+                )
+            ) with eagerSingleton { value ?: callFunction(parent, kFunction) }
+            BindType.Factory -> bind<T>(
+                getTag(
+                    beanMeta, kFunction.returnType.classifier as KClass<*>?
+                )
+            ) with factory { value ?: callFunction(parent, kFunction) }
+            BindType.Multiton -> bind<T>(
+                getTag(
+                    beanMeta, kFunction.returnType.classifier as KClass<*>?
+                )
+            ) with multiton { value ?: callFunction(parent, kFunction) }
 //            BindType.Instance -> bind<T>(getTag(beanMeta)) with instance { _instance }
 //            BindType.Constant -> {
 //                bindConstant<T>(getTag(beanMeta, T::class)!!) { value ?: callFuntion(parent, kFunction) }
@@ -88,7 +115,7 @@ object KodeinBeanLoader {
         }
     }
 
-    fun <T> org.kodein.di.DirectDI.callFunction(parent:Any, kFunction: KFunction<T>) : T {
+    fun <T> org.kodein.di.DirectDI.callFunction(parent: Any, kFunction: KFunction<T>): T {
 
         if (kFunction.parameters.isEmpty()) {
             return kFunction.call(parent)
@@ -96,7 +123,7 @@ object KodeinBeanLoader {
 
         return kFunction.callBy(kFunction.parameters
             .map {
-                it to if(it.name == null) parent else createArgument(it)
+                it to if (it.name == null) parent else createArgument(it)
             }.filter { it.second != null }.toMap()
         )
     }
@@ -118,17 +145,21 @@ object KodeinBeanLoader {
                     Reference.WeakReference -> weakReference
                     Reference.ThreadLocal -> threadLocal
                 }
-                bind<T>(getTag(beanMeta)) with singleton(ref = ref, sync = beanMeta.sync) {
+                bind<T>(getTag(beanMeta, kClass)) with singleton(ref = ref, sync = beanMeta.sync) {
                     value ?: createInstance(
                         kClass
                     )
                 }
             }
 
-            BindType.Provider -> bind<T>(getTag(beanMeta)) with provider { value ?: createInstance(kClass) }
-            BindType.EagerSingleton -> bind<T>(getTag(beanMeta)) with eagerSingleton { value ?: createInstance(kClass) }
-            BindType.Factory -> bind<T>(getTag(beanMeta)) with factory { value ?: createInstance(kClass) }
-            BindType.Multiton -> bind<T>(getTag(beanMeta)) with multiton { value ?: createInstance(kClass) }
+            BindType.Provider -> bind<T>(getTag(beanMeta, kClass)) with provider { value ?: createInstance(kClass) }
+            BindType.EagerSingleton -> bind<T>(getTag(beanMeta, kClass)) with eagerSingleton {
+                value ?: createInstance(
+                    kClass
+                )
+            }
+            BindType.Factory -> bind<T>(getTag(beanMeta, kClass)) with factory { value ?: createInstance(kClass) }
+            BindType.Multiton -> bind<T>(getTag(beanMeta, kClass)) with multiton { value ?: createInstance(kClass) }
 //            BindType.Instance -> bind<T>(getTag(beanMeta)) with instance { _instance }
             BindType.Constant -> {
                 bindConstant<T>(getTag(beanMeta, kClass)!!) { value ?: kClass.createInstance() }
@@ -140,11 +171,46 @@ object KodeinBeanLoader {
 
     inline fun <reified T : Any> DIAware.inject(tag: String? = null): org.kodein.di.LazyDelegate<T> {
         val kClass = T::class
-        if (!kClass.hasAnnotation<KodeinBean>()) {
-            return instance(tag)
+        var keyPair = if (!kClass.hasAnnotation<KodeinBean>()) {
+            findKeyByTag(tag ?: kClass.jvmName)
+        } else {
+            val meta = kClass.findAnnotation<KodeinBean>()!!
+            findKeyByTag(getTag(meta, kClass))
         }
-        val meta = kClass.findAnnotation<KodeinBean>()!!
-        return instance(getTag(meta, kClass))
+        if (keyPair == null) {
+            keyPair = findKeyByType(kClass) ?: throw Exception("Bean 을 찾을 수 없습니다. $kClass)")
+        }
+        return Instance(keyPair.second, keyPair.first) as LazyDelegate<T>
+    }
+
+    inline fun <reified T : Any> DIAware.directInject(tag: String? = null): T {
+        val kClass = T::class
+        var keyPair = if (!kClass.hasAnnotation<KodeinBean>()) {
+            findKeyByTag(tag ?: kClass.jvmName)
+        } else {
+            val meta = kClass.findAnnotation<KodeinBean>()!!
+            findKeyByTag(getTag(meta, kClass))
+        }
+        if (keyPair == null) {
+            keyPair = findKeyByType(kClass) ?: throw Exception("Bean 을 찾을 수 없습니다. $kClass)")
+        }
+        return direct.Instance(keyPair.second, keyPair.first) as T
+    }
+
+    inline fun DIAware.findKeyByTag(tag: String?): Pair<Any?, TypeToken<out Any>>? {
+        return di.container.tree.let {
+            it.bindings.keys.stream().filter { key ->
+                key.tag == tag
+            }.findAny().map { key -> key.tag to key.type }.orElse(null)
+        }
+    }
+
+    inline fun <reified T : Any> DIAware.findKeyByType(type: KClass<T>): Pair<Any?, TypeToken<out Any>>? {
+        return di.container.tree.let {
+            it.bindings.keys.stream().filter { key ->
+                key.type.jvmType.typeName.startsWith(type.jvmName)
+            }.findAny().map { key -> key.tag to key.type }.orElse(null)
+        }
     }
 
     inline fun <reified T : Any> DIAware.injectConst(kodeinInject: KodeinInject): org.kodein.di.LazyDelegate<T> {
@@ -196,20 +262,25 @@ object KodeinBeanLoader {
         if (parameter.isOptional) {
             return null
         }
-        throw Exception("not find instance !!")
+        throw Exception("not find instance !! $parameter")
     }
 
-    private fun <T : Any> org.kodein.di.DirectDI.find(tag: String?, type: KClass<T>): Any? {
-        var ret: Any? = instanceOrNull(tag)
+    fun <T : Any> org.kodein.di.DirectDI.find(tag: String?, type: KClass<T>): Any? {
+        var ret: Any? = tag?.let { instanceOrNull(it) } ?: type?.jvmName?.let { instanceOrNull(it) }
         if (ret == null) {
-            ret = instanceOrNull()
+            val key = di.container.tree.let {
+                it.bindings.keys.stream().filter { key ->
+                    key.type.jvmType.typeName.startsWith(type.jvmName)
+                }.findAny().orElseThrow { Exception("Bean을 찾을수 없습니다. ${type.jvmName}") }
+            }
+            return Instance(key.type, key.tag)
         }
         return ret
     }
 
     fun getTag(beanMeta: KodeinBean, kClass: KClass<*>? = null): String? {
         if (beanMeta.tag == "") {
-            return kClass?.simpleName
+            return kClass?.jvmName
         }
         return beanMeta.tag
     }
