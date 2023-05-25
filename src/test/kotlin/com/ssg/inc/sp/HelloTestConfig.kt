@@ -15,8 +15,8 @@ class HelloTestConfig {
     val test3: String = "test1"
 
     @KodeinBean(tag = "test4")
-    fun testBean(@KodeinInject(tag="test2") test2:Int): TestBean {
-        return TestBean(test2)
+    fun testBean(@KodeinInject(tag="test2") test1:Int): TestBean {
+        return TestBean(test1)
     }
     data class TestBean(val test2:Int)
 }

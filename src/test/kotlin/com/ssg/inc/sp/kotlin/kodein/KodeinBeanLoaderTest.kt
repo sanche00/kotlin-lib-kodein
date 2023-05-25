@@ -10,6 +10,9 @@ import org.junit.Test
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.kodein.di.DI
 import org.kodein.di.instance
+import kotlin.reflect.full.hasAnnotation
+import kotlin.reflect.full.primaryConstructor
+import kotlin.reflect.jvm.jvmName
 
 class KodeinBeanLoaderTest {
 
@@ -28,10 +31,10 @@ class KodeinBeanLoaderTest {
         }
         val helloTest by di.instance<HelloTest> ( "test" )
         assertEquals(helloTest.text(), "test1")
-        val kodeinDIAware by di.instance<KodeinDIAware> ()
+        val kodeinDIAware by di.instance<KodeinDIAware> (tag = KodeinDIAware::class.jvmName)
         assertEquals(kodeinDIAware.getText(), "test1")
 
-        val kodeinDIAwareAuto by di.instance<KodeinDIAwareAuto> ()
+        val kodeinDIAwareAuto by di.instance<KodeinDIAwareAuto> (tag = KodeinDIAwareAuto::class.jvmName)
         assertEquals(kodeinDIAwareAuto.getText(), "test1")
         assertEquals(kodeinDIAwareAuto.test3, "test1")
         assertEquals(kodeinDIAwareAuto.test2, 10)
@@ -40,6 +43,5 @@ class KodeinBeanLoaderTest {
         assertEquals(testBean.test2, 10)
 
     }
-
 
 }

@@ -92,16 +92,19 @@ object KodeinBeanLoader {
                     beanMeta, kFunction.returnType.classifier as KClass<*>?
                 )
             ) with provider { value ?: callFunction(parent, kFunction) }
+
             BindType.EagerSingleton -> bind<T>(
                 getTag(
                     beanMeta, kFunction.returnType.classifier as KClass<*>?
                 )
             ) with eagerSingleton { value ?: callFunction(parent, kFunction) }
+
             BindType.Factory -> bind<T>(
                 getTag(
                     beanMeta, kFunction.returnType.classifier as KClass<*>?
                 )
             ) with factory { value ?: callFunction(parent, kFunction) }
+
             BindType.Multiton -> bind<T>(
                 getTag(
                     beanMeta, kFunction.returnType.classifier as KClass<*>?
@@ -115,7 +118,7 @@ object KodeinBeanLoader {
         }
     }
 
-    fun <T> org.kodein.di.DirectDI.callFunction(parent: Any, kFunction: KFunction<T>): T {
+    fun <T> DirectDI.callFunction(parent: Any, kFunction: KFunction<T>): T {
 
         if (kFunction.parameters.isEmpty()) {
             return kFunction.call(parent)
@@ -158,66 +161,52 @@ object KodeinBeanLoader {
                     kClass
                 )
             }
+
             BindType.Factory -> bind<T>(getTag(beanMeta, kClass)) with factory { value ?: createInstance(kClass) }
             BindType.Multiton -> bind<T>(getTag(beanMeta, kClass)) with multiton { value ?: createInstance(kClass) }
 //            BindType.Instance -> bind<T>(getTag(beanMeta)) with instance { _instance }
             BindType.Constant -> {
                 bindConstant<T>(getTag(beanMeta, kClass)!!) { value ?: kClass.createInstance() }
             }
+
             else -> throw Exception("not yet")
         }
-
     }
 
-    inline fun <reified T : Any> DIAware.inject(tag: String? = null): org.kodein.di.LazyDelegate<T> {
+    inline fun <reified T : Any> DIAware.findKeyPair(tag: String? = null): Pair<Any?, TypeToken<out Any>> {
         val kClass = T::class
         var keyPair = if (!kClass.hasAnnotation<KodeinBean>()) {
-            findKeyByTag(tag ?: kClass.jvmName)
+            findKey { it.tag == tag ?: kClass.jvmName }
         } else {
-            val meta = kClass.findAnnotation<KodeinBean>()!!
-            findKeyByTag(getTag(meta, kClass))
+            findKey { it.tag == getTag(kClass.findAnnotation<KodeinBean>()!!, kClass) }
         }
-        if (keyPair == null) {
-            keyPair = findKeyByType(kClass) ?: throw Exception("Bean 을 찾을 수 없습니다. $kClass)")
-        }
-        return Instance(keyPair.second, keyPair.first) as LazyDelegate<T>
+        return keyPair ?: findKey { it.type.jvmType.typeName.startsWith(kClass.jvmName) }
+        ?: throw Exception("Bean 을 찾을 수 없습니다. $kClass)")
     }
 
-    inline fun <reified T : Any> DIAware.directInject(tag: String? = null): T {
-        val kClass = T::class
-        var keyPair = if (!kClass.hasAnnotation<KodeinBean>()) {
-            findKeyByTag(tag ?: kClass.jvmName)
-        } else {
-            val meta = kClass.findAnnotation<KodeinBean>()!!
-            findKeyByTag(getTag(meta, kClass))
+    inline fun <reified T : Any> DIAware.inject(tag: String? = null) =
+        findKeyPair<T>(tag).let {
+            Instance(it.second, it.first) as LazyDelegate<T>
         }
-        if (keyPair == null) {
-            keyPair = findKeyByType(kClass) ?: throw Exception("Bean 을 찾을 수 없습니다. $kClass)")
-        }
-        return direct.Instance(keyPair.second, keyPair.first) as T
-    }
 
-    inline fun DIAware.findKeyByTag(tag: String?): Pair<Any?, TypeToken<out Any>>? {
-        return di.container.tree.let {
-            it.bindings.keys.stream().filter { key ->
-                key.tag == tag
-            }.findAny().map { key -> key.tag to key.type }.orElse(null)
+    inline fun <reified T : Any> DIAware.directInject(tag: String? = null) =
+        findKeyPair<T>(tag).let {
+            direct.Instance(it.second, it.first) as T
         }
-    }
 
-    inline fun <reified T : Any> DIAware.findKeyByType(type: KClass<T>): Pair<Any?, TypeToken<out Any>>? {
-        return di.container.tree.let {
-            it.bindings.keys.stream().filter { key ->
-                key.type.jvmType.typeName.startsWith(type.jvmName)
-            }.findAny().map { key -> key.tag to key.type }.orElse(null)
+    inline fun DIAware.findKey(predicate: (DI.Key<*, *, *>) -> Boolean) =
+        di.container.tree.let {
+            it.bindings.keys.firstOrNull { key ->
+                predicate(key)
+            }?.let { key -> key.tag to key.type }
         }
-    }
 
-    inline fun <reified T : Any> DIAware.injectConst(kodeinInject: KodeinInject): org.kodein.di.LazyDelegate<T> {
+
+    inline fun <reified T : Any> DIAware.injectConst(kodeinInject: KodeinInject): LazyDelegate<T> {
         return injectConst(kodeinInject.tag)
     }
 
-    inline fun <reified T : Any> DIAware.injectConst(tag: String): org.kodein.di.LazyDelegate<T> {
+    inline fun <reified T : Any> DIAware.injectConst(tag: String): LazyDelegate<T> {
 
         val key = di.container.tree.let {
             it.bindings.keys.first { key -> key.tag == tag }
@@ -225,7 +214,7 @@ object KodeinBeanLoader {
         return Instance(key.type, tag) as LazyDelegate<T>
     }
 
-    fun <T : Any> org.kodein.di.DirectDI.createInstance(kClass: KClass<T>): T {
+    fun <T : Any> DirectDI.createInstance(kClass: KClass<T>): T {
         if (kClass.constructors.size > 1) {
             throw Exception("too many constructor : ${kClass.constructors.size}")
         }
@@ -234,7 +223,6 @@ object KodeinBeanLoader {
             return kClass.createInstance()
         }
 
-//        return constructor.callBy(constructor.parameters.associateWith { createArgument(it) })
         return constructor.callBy(constructor.parameters
             .map {
                 it to createArgument(it)
@@ -242,7 +230,7 @@ object KodeinBeanLoader {
         )
     }
 
-    private fun org.kodein.di.DirectDI.createArgument(parameter: KParameter): Any? {
+    private fun DirectDI.createArgument(parameter: KParameter): Any? {
         if (!parameter.hasAnnotation<KodeinInject>()) {
             return notDefineInject(parameter)
         }
@@ -251,7 +239,7 @@ object KodeinBeanLoader {
         return find(if (inject.tag != "") inject.tag else null, parameter.type.classifier as KClass<*>)
     }
 
-    private fun org.kodein.di.DirectDI.notDefineInject(parameter: KParameter): Any? {
+    private fun DirectDI.notDefineInject(parameter: KParameter): Any? {
         if (parameter.type.classifier == org.kodein.di.DI::class) {
             return di
         }
@@ -265,17 +253,11 @@ object KodeinBeanLoader {
         throw Exception("not find instance !! $parameter")
     }
 
-    fun <T : Any> org.kodein.di.DirectDI.find(tag: String?, type: KClass<T>): Any? {
+    fun <T : Any> DirectDI.find(tag: String?, type: KClass<T>): Any? {
         var ret: Any? = tag?.let { instanceOrNull(it) } ?: type?.jvmName?.let { instanceOrNull(it) }
-        if (ret == null) {
-            val key = di.container.tree.let {
-                it.bindings.keys.stream().filter { key ->
-                    key.type.jvmType.typeName.startsWith(type.jvmName)
-                }.findAny().orElseThrow { Exception("Bean을 찾을수 없습니다. ${type.jvmName}") }
-            }
-            return Instance(key.type, key.tag)
-        }
-        return ret
+        return ret ?: di.findKey { it.type.jvmType.typeName.startsWith(type.jvmName) }?.let {
+            return Instance(it.second, it.first)
+        } ?: Exception("Bean을 찾을수 없습니다. ${type.jvmName}")
     }
 
     fun getTag(beanMeta: KodeinBean, kClass: KClass<*>? = null): String? {

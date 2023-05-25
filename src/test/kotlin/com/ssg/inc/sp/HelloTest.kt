@@ -6,7 +6,7 @@ import org.junit.Test
 import kotlin.test.assertEquals
 
 @KodeinBean(tag = "test")
-class HelloTest (@KodeinInject(tag = "test1") private val test : String ="TEST"){
+class HelloTest (@KodeinInject(tag = "test1") val test : String ="TEST"){
 
     fun text(): String {
         return test;
