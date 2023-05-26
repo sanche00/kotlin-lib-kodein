@@ -163,7 +163,7 @@ object KodeinBeanLoader {
             }
 
             BindType.Factory -> bind<T>(getTag(beanMeta, kClass)) with factory { value ?: createInstance(kClass) }
-            BindType.Multiton -> bind<T>(getTag(beanMeta, kClass)) with multiton { value ?: createInstance(kClass) }
+            BindType.Multiton -> bind<T>(getTag(beanMeta, kClass)) with multiton { (value ?: createInstance(kClass)) }
 //            BindType.Instance -> bind<T>(getTag(beanMeta)) with instance { _instance }
             BindType.Constant -> {
                 bindConstant<T>(getTag(beanMeta, kClass)!!) { value ?: kClass.createInstance() }
@@ -218,16 +218,22 @@ object KodeinBeanLoader {
         if (kClass.constructors.size > 1) {
             throw Exception("too many constructor : ${kClass.constructors.size}")
         }
-        val constructor = kClass.primaryConstructor!!
-        if (constructor.parameters.isEmpty()) {
-            return kClass.createInstance()
+
+        try {
+            val constructor = kClass.primaryConstructor!!
+            if (constructor.parameters.isEmpty()) {
+                return kClass.createInstance()
+            }
+            logger.info(constructor.returnType.toString())
+            return constructor.callBy(constructor.parameters
+                .map {
+                    it to createArgument(it)
+                }.filter { it.second != null }.toMap()
+            )
+        } catch (e: Exception) {
+            throw Exception("createInstance Error : ${kClass}", e)
         }
 
-        return constructor.callBy(constructor.parameters
-            .map {
-                it to createArgument(it)
-            }.filter { it.second != null }.toMap()
-        )
     }
 
     private fun DirectDI.createArgument(parameter: KParameter): Any? {
