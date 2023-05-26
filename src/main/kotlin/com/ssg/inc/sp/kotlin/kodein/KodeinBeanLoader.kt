@@ -9,6 +9,7 @@ import kotlin.reflect.KClass
 import kotlin.reflect.KFunction
 import kotlin.reflect.KParameter
 import kotlin.reflect.full.*
+import kotlin.reflect.jvm.internal.impl.load.kotlin.JvmType.Primitive
 import kotlin.reflect.jvm.isAccessible
 import kotlin.reflect.jvm.javaField
 import kotlin.reflect.jvm.jvmName
@@ -237,33 +238,37 @@ object KodeinBeanLoader {
     }
 
     private fun DirectDI.createArgument(parameter: KParameter): Any? {
+        var ret : Any? = null
         if (!parameter.hasAnnotation<KodeinInject>()) {
-            return notDefineInject(parameter)
+            ret = notDefineInject(parameter)
+        }else {
+            val inject = parameter.findAnnotation<KodeinInject>()!!
+            ret = find(if (inject.tag != "") inject.tag else null, parameter.type.classifier as KClass<*>)
         }
-        val inject = parameter.findAnnotation<KodeinInject>()!!
 
-        return find(if (inject.tag != "") inject.tag else null, parameter.type.classifier as KClass<*>)
-    }
-
-    private fun DirectDI.notDefineInject(parameter: KParameter): Any? {
-        if (parameter.type.classifier == org.kodein.di.DI::class) {
-            return di
-        }
-        val ret = find(parameter.name, parameter.type.classifier as KClass<*>)
         if (ret != null) {
             return ret
         }
         if (parameter.isOptional) {
             return null
         }
+
         throw Exception("not find instance !! $parameter")
+    }
+
+    private fun DirectDI.notDefineInject(parameter: KParameter): Any? {
+        if (parameter.type.classifier == org.kodein.di.DI::class) {
+            return di
+        }
+        return find(parameter.name, parameter.type.classifier as KClass<*>)
+
     }
 
     fun <T : Any> DirectDI.find(tag: String?, type: KClass<T>): Any? {
         var ret: Any? = tag?.let { instanceOrNull(it) } ?: type?.jvmName?.let { instanceOrNull(it) }
-        return ret ?: di.findKey { it.type.jvmType.typeName.startsWith(type.jvmName) }?.let {
+        return ret ?: di.findKey { !type.isBaseType() && it.type.jvmType.typeName.startsWith(type.jvmName) }?.let {
             return Instance(it.second, it.first)
-        } ?: Exception("Bean을 찾을수 없습니다. ${type.jvmName}")
+        }
     }
 
     fun getTag(beanMeta: KodeinBean, kClass: KClass<*>? = null): String? {
@@ -274,3 +279,15 @@ object KodeinBeanLoader {
     }
 
 }
+
+val PrimitiveTypes = setOf(Int::class
+    , Char::class
+    , Byte::class
+    , String::class
+    , Double::class
+    , Any::class
+    , Float::class
+    , Long::class
+    , Short::class
+)
+private fun <T : Any> KClass<T>.isBaseType() = PrimitiveTypes.contains(this)
