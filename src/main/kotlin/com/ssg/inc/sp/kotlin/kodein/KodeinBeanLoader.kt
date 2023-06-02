@@ -263,7 +263,7 @@ object KodeinBeanLoader {
         var ret: Any? = tag?.let { instanceOrNull(it) } ?: type?.jvmName?.let { instanceOrNull(it) }
         return ret ?: di.findKey { it.type.jvmType.typeName.startsWith(type.jvmName) }?.let {
             return Instance(it.second, it.first)
-        } ?: Exception("Bean을 찾을수 없습니다. ${type.jvmName}")
+        } ?: throw Exception("Bean을 찾을수 없습니다. ${type.jvmName}")
     }
 
     fun getTag(beanMeta: KodeinBean, kClass: KClass<*>? = null): String? {
